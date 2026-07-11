@@ -11,14 +11,15 @@ import (
 
 // Constants for room info bucket and keys
 const (
-	RoomDbTableIdKey    = "id"
-	RoomIdKey           = "room_id"
-	RoomSidKey          = "room_sid"
-	RoomEmptyTimeoutKey = "empty_timeout"
-	RoomMaxParticipants = "max_participants"
-	RoomStatusKey       = "status"
-	RoomMetadataKey     = "metadata"
-	RoomCreatedKey      = "created_at"
+	RoomDbTableIdKey       = "id"
+	RoomIdKey              = "room_id"
+	RoomSidKey             = "room_sid"
+	RoomEmptyTimeoutKey    = "empty_timeout"
+	RoomMaxParticipants    = "max_participants"
+	RoomStatusKey          = "status"
+	RoomMetadataKey        = "metadata"
+	RoomCreatedKey         = "created_at"
+	RoomLastOccupiedAtKey  = "last_occupied_at"
 
 	RoomStatusCreated      = "created"
 	RoomStatusActive       = "active"
@@ -64,15 +65,17 @@ func (s *NatsService) AddRoom(tableId uint64, roomId, roomSid string, emptyTimeo
 	}
 
 	// Prepare room data using short field names as keys
+	nowUnix := fmt.Sprintf("%d", time.Now().UTC().Unix())
 	data := map[string]string{
-		RoomDbTableIdKey:    fmt.Sprintf("%d", tableId),
-		RoomIdKey:           roomId,
-		RoomSidKey:          roomSid,
-		RoomEmptyTimeoutKey: fmt.Sprintf("%d", *emptyTimeout),
-		RoomMaxParticipants: fmt.Sprintf("%d", *maxParticipants),
-		RoomStatusKey:       RoomStatusCreated,
-		RoomCreatedKey:      fmt.Sprintf("%d", time.Now().UTC().Unix()),
-		RoomMetadataKey:     mt,
+		RoomDbTableIdKey:      fmt.Sprintf("%d", tableId),
+		RoomIdKey:             roomId,
+		RoomSidKey:            roomSid,
+		RoomEmptyTimeoutKey:   fmt.Sprintf("%d", *emptyTimeout),
+		RoomMaxParticipants:   fmt.Sprintf("%d", *maxParticipants),
+		RoomStatusKey:         RoomStatusCreated,
+		RoomCreatedKey:        nowUnix,
+		RoomLastOccupiedAtKey: nowUnix,
+		RoomMetadataKey:       mt,
 	}
 
 	// Store each key-value pair and update cache manually
@@ -157,6 +160,66 @@ func (s *NatsService) UpdateRoomStatus(roomId string, status string) error {
 	s.cs.setRoomInfoCache(roomId, RoomStatusKey, status, rev)
 
 	return nil
+}
+
+// TouchRoomLastOccupiedAt records that the room currently has (or just had) occupants.
+// Used by the empty-room janitor so emptyTimeout is measured from last occupancy, not CreatedAt.
+func (s *NatsService) TouchRoomLastOccupiedAt(roomId string) {
+	kv, err := s.js.KeyValue(s.ctx, s.formatConsolidatedRoomBucket(roomId))
+	if err != nil || kv == nil {
+		return
+	}
+	now := fmt.Sprintf("%d", time.Now().UTC().Unix())
+	rev, err := kv.PutString(s.ctx, s.formatRoomKey(RoomLastOccupiedAtKey), now)
+	if err != nil {
+		return
+	}
+	s.cs.setRoomInfoCache(roomId, RoomLastOccupiedAtKey, now, rev)
+}
+
+// GetRoomLastOccupiedAt returns the unix timestamp when the room was last known occupied.
+// Falls back to 0 if unset (caller should use CreatedAt).
+func (s *NatsService) GetRoomLastOccupiedAt(roomId string) uint64 {
+	kv, err := s.getKV(s.formatConsolidatedRoomBucket(roomId))
+	if err != nil || kv == nil {
+		return 0
+	}
+	v, _ := s.getUint64Value(kv, s.formatRoomKey(RoomLastOccupiedAtKey))
+	return v
+}
+
+// CountUsersWithStatus returns how many users in the room match any of the given statuses.
+func (s *NatsService) CountUsersWithStatus(roomId string, statuses ...string) (int, error) {
+	wanted := make(map[string]struct{}, len(statuses))
+	for _, st := range statuses {
+		wanted[st] = struct{}{}
+	}
+	if cached := s.cs.getRoomUserIds(roomId, ""); len(cached) > 0 {
+		count := 0
+		for _, uid := range cached {
+			st, err := s.GetRoomUserStatus(roomId, uid)
+			if err != nil {
+				continue
+			}
+			if _, ok := wanted[st]; ok {
+				count++
+			}
+		}
+		if count > 0 {
+			return count, nil
+		}
+	}
+	users, err := s.GetRoomUserStatusEntries(roomId)
+	if err != nil || users == nil {
+		return 0, err
+	}
+	count := 0
+	for _, entry := range users {
+		if _, ok := wanted[string(entry.Value())]; ok {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // OnAfterSessionEndCleanup is the final, authoritative cleanup process for a room in NATS.

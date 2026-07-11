@@ -119,6 +119,17 @@ func (m *RoomModel) CreateRoom(userCtx context.Context, r *plugnmeet.CreateRoomR
 	}
 	log.WithField("table_id", roomDbInfo.ID).Info("Room info added to NATS")
 
+	// Align LiveKit empty_timeout with PlugNMeet so a flaky host disconnect does not
+	// finish the media room (and cascade SESSION_ENDED) while others remain.
+	emptyTimeout := uint32(1800)
+	if r.EmptyTimeout != nil && *r.EmptyTimeout > 0 {
+		emptyTimeout = *r.EmptyTimeout
+	}
+	if err := m.lk.EnsureRoom(r.RoomId, emptyTimeout); err != nil {
+		// Non-fatal: auto_create may still open the room on first join.
+		log.WithError(err).Warn("Failed to ensure LiveKit room with empty timeout")
+	}
+
 	// preload whiteboard file if needed
 	if !r.Metadata.IsBreakoutRoom {
 		go m.prepareWhiteboardPreloadFile(r.Metadata, r.RoomId, sid, log)
