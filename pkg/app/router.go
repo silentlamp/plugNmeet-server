@@ -115,7 +115,7 @@ func (r *Router) registerBaseRoutes() {
 	r.fiberApp.Add([]string{"GET", "HEAD"}, "/", func(c fiber.Ctx) error {
 		return c.Render("index", nil)
 	})
-	r.fiberApp.Add([]string{"GET", "HEAD"}, "/login*", func(c fiber.Ctx) error {
+	r.fiberApp.Add([]string{"GET", "HEAD"}, "/login", func(c fiber.Ctx) error {
 		return c.Render("login", nil)
 	})
 	r.fiberApp.Post("/webhook", r.ctrl.WebhookController.HandleWebhook)
