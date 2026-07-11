@@ -118,7 +118,7 @@ func (r *Router) registerBaseRoutes() {
 	// Learner portal is Nginx-static on portal.zenleader.xyz. Keep a backup redirect
 	// for direct Fiber hits (:8082); production /login is also redirected in Nginx.
 	r.fiberApp.Add([]string{"GET", "HEAD"}, "/login", func(c fiber.Ctx) error {
-		return c.Redirect("https://portal.zenleader.xyz/login", fiber.StatusFound)
+		return c.Redirect().Status(fiber.StatusFound).To("https://portal.zenleader.xyz/login")
 	})
 	// Do not Render("login") — login.html is not part of the meeting client dist.
 	r.fiberApp.Post("/webhook", r.ctrl.WebhookController.HandleWebhook)
