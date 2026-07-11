@@ -47,7 +47,7 @@ client:
     # If true, copyright text will be displayed.
     display: true
     # Keep the text concise; only limited HTML tags are supported: 'b', 'i', 'em', 'strong', 'a'
-    text: 'Powered by <a href="https://www.plugnmeet.org" target="_blank">plugNmeet</a>'
+    text: 'Powered by <a href="https://zenleader.xyz" target="_blank">ZenLeader</a>'
   # Specify host information for accurate BBB join URLs when behind a load balancer.
   bbb_join_host: "http://localhost:3000"
 #  auto_client_download:

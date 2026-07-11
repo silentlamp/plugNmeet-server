@@ -213,7 +213,7 @@ func (m *RoomModel) setRoomDefaults(r *plugnmeet.CreateRoomReq) {
 	if copyrightConf == nil {
 		r.Metadata.CopyrightConf = &plugnmeet.CopyrightConf{
 			Display: true,
-			Text:    "Powered by <a href=\"https://www.plugnmeet.org\" target=\"_blank\">plugNmeet</a>",
+			Text:    "Powered by <a href=\"https://zenleader.xyz\" target=\"_blank\">ZenLeader</a>",
 		}
 	} else {
 		d := &plugnmeet.CopyrightConf{
