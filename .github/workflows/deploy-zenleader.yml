@@ -62,8 +62,10 @@ jobs:
             if [ -z "$DEPLOY_PATH" ]; then
               DEPLOY_PATH="/home/dev/zen-leader"
             fi
+            # Avoid `sudo -E` (blocked on VPS). Export env for the deploy user.
+            export DOCKERHUB_USERNAME DOCKERHUB_TOKEN PLUGNMEET_IMAGE
             if [ -x "$DEPLOY_PATH/scripts/ci-deploy-plugnmeet.sh" ]; then
-              sudo -E "$DEPLOY_PATH/scripts/ci-deploy-plugnmeet.sh"
+              bash "$DEPLOY_PATH/scripts/ci-deploy-plugnmeet.sh"
             else
               echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
               cd /opt/plugNmeet
