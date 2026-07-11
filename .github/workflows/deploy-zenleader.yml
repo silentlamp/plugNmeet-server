@@ -70,7 +70,11 @@ jobs:
               echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
               cd /opt/plugNmeet
               docker pull "$PLUGNMEET_IMAGE"
-              sed -i -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml
+              if [ -w docker-compose.yaml ]; then
+                sed -i -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml
+              else
+                sudo sed -i -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml
+              fi
               docker compose up -d --no-deps --force-recreate plugnmeet
               curl -fsS http://127.0.0.1:8082/healthCheck
             fi
