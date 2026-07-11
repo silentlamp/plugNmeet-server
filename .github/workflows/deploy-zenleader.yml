@@ -71,9 +71,13 @@ jobs:
               cd /opt/plugNmeet
               docker pull "$PLUGNMEET_IMAGE"
               if [ -w docker-compose.yaml ]; then
-                sed -i -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml
+                tmp="$(mktemp)"
+                sed -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml >"$tmp"
+                cat "$tmp" >docker-compose.yaml
+                rm -f "$tmp"
               else
-                sudo sed -i -E "s|image:.*plugnmeet-server.*|image: ${PLUGNMEET_IMAGE}|g" docker-compose.yaml
+                echo "ERROR: docker-compose.yaml not writable by deploy user" >&2
+                exit 1
               fi
               docker compose up -d --no-deps --force-recreate plugnmeet
               curl -fsS http://127.0.0.1:8082/healthCheck
