@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"path"
+	"regexp"
 	"runtime"
 
 	"github.com/goccy/go-json"
@@ -20,6 +21,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
+
+// zenLeaderRoomCodeRE matches share-link paths like /abc-defg-hijk (Java MeetRoomCodes).
+var zenLeaderRoomCodeRE = regexp.MustCompile(`^[a-z]{3}-[a-z]{4}-[a-z]{4}$`)
 
 // Router is a struct to hold the dependencies for setting up routes
 type Router struct {
@@ -101,6 +105,16 @@ func NewRouter(appConfig *config.AppConfig, ctrl ApplicationControllers, ll *log
 	r.registerAuthRoutes()
 	r.registerBBBRoutes()
 	r.registerAPIRoutes()
+
+	// Google Meet-style share links: serve the meeting SPA for /{roomCode}.
+	// Registered after API/auth routes so single-segment paths like /healthCheck stay intact.
+	r.fiberApp.Add([]string{"GET", "HEAD"}, "/:roomCode", func(c fiber.Ctx) error {
+		roomCode := c.Params("roomCode")
+		if !zenLeaderRoomCodeRE.MatchString(roomCode) {
+			return c.Status(fiber.StatusNotFound).SendString("not found")
+		}
+		return c.Render("index", nil)
+	})
 
 	// --- Final Catch-All 404 Handler ---
 	// This MUST be the last middleware to be registered.
