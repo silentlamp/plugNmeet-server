@@ -60,6 +60,36 @@ func (s *LivekitService) EndRoom(roomId string) (string, error) {
 	return res.String(), nil
 }
 
+// EnsureRoom creates (or updates) a LiveKit room with empty/departure timeouts aligned
+// with PlugNMeet. Without this, LiveKit auto_create uses a short default empty_timeout
+// and can emit room_finished while participants are still reconnecting.
+func (s *LivekitService) EnsureRoom(roomId string, emptyTimeoutSec uint32) error {
+	if emptyTimeoutSec == 0 {
+		emptyTimeoutSec = 1800
+	}
+	// Allow brief disconnects (flaky host network) before LiveKit treats participant as left.
+	const departureTimeoutSec uint32 = 60
+
+	req := &livekit.CreateRoomRequest{
+		Name:             roomId,
+		EmptyTimeout:     emptyTimeoutSec,
+		DepartureTimeout: departureTimeoutSec,
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, time.Second*15)
+	defer cancel()
+
+	_, err := s.lkc.CreateRoom(ctx, req)
+	if err != nil {
+		return fmt.Errorf("livekit CreateRoom failed: %w", err)
+	}
+	s.logger.WithFields(logrus.Fields{
+		"roomId":           roomId,
+		"emptyTimeout":     emptyTimeoutSec,
+		"departureTimeout": departureTimeoutSec,
+	}).Info("ensured LiveKit room timeouts")
+	return nil
+}
+
 // MuteUnMuteTrack can be used to mute/unmute track. This will send request to livekit
 func (s *LivekitService) MuteUnMuteTrack(ctx context.Context, roomId string, userId string, trackSid string, muted bool) (*livekit.MuteRoomTrackResponse, error) {
 	data := livekit.MuteRoomTrackRequest{

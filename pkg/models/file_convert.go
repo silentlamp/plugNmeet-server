@@ -282,7 +282,7 @@ func (m *FileModel) MergeWhiteboardPdfExport(req *plugnmeet.UploadedFileMergeReq
 	args := []string{
 		"--output", finalPdfPath,
 		"--pagesize", "A4",
-		"--creator", "plugNmeet",
+		"--creator", "ZenLeader",
 		"--title", finalPdfFileName,
 		"--subject", req.ResumableFilename,
 	}

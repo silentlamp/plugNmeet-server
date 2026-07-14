@@ -3,6 +3,7 @@ package app
 import (
 	"io"
 	"path"
+	"regexp"
 	"runtime"
 
 	"github.com/goccy/go-json"
@@ -20,6 +21,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 )
+
+// zenLeaderRoomCodeRE matches share-link paths like /abc-defg-hijk (Java MeetRoomCodes).
+var zenLeaderRoomCodeRE = regexp.MustCompile(`^[a-z]{3}-[a-z]{4}-[a-z]{4}$`)
 
 // Router is a struct to hold the dependencies for setting up routes
 type Router struct {
@@ -102,6 +106,16 @@ func NewRouter(appConfig *config.AppConfig, ctrl ApplicationControllers, ll *log
 	r.registerBBBRoutes()
 	r.registerAPIRoutes()
 
+	// Google Meet-style share links: serve the meeting SPA for /{roomCode}.
+	// Registered after API/auth routes so single-segment paths like /healthCheck stay intact.
+	r.fiberApp.Add([]string{"GET", "HEAD"}, "/:roomCode", func(c fiber.Ctx) error {
+		roomCode := c.Params("roomCode")
+		if !zenLeaderRoomCodeRE.MatchString(roomCode) {
+			return c.Status(fiber.StatusNotFound).SendString("not found")
+		}
+		return c.Render("index", nil)
+	})
+
 	// --- Final Catch-All 404 Handler ---
 	// This MUST be the last middleware to be registered.
 	r.fiberApp.Use(func(c fiber.Ctx) error {
@@ -115,9 +129,12 @@ func (r *Router) registerBaseRoutes() {
 	r.fiberApp.Add([]string{"GET", "HEAD"}, "/", func(c fiber.Ctx) error {
 		return c.Render("index", nil)
 	})
-	r.fiberApp.Add([]string{"GET", "HEAD"}, "/login*", func(c fiber.Ctx) error {
-		return c.Render("login", nil)
+	// Learner portal is Nginx-static on portal.zenleader.xyz. Keep a backup redirect
+	// for direct Fiber hits (:8082); production /login is also redirected in Nginx.
+	r.fiberApp.Add([]string{"GET", "HEAD"}, "/login", func(c fiber.Ctx) error {
+		return c.Redirect().Status(fiber.StatusFound).To("https://portal.zenleader.xyz/login")
 	})
+	// Do not Render("login") — login.html is not part of the meeting client dist.
 	r.fiberApp.Post("/webhook", r.ctrl.WebhookController.HandleWebhook)
 	r.fiberApp.Add([]string{"GET", "HEAD"}, "/download/uploadedFile/*", r.ctrl.FileController.HandleDownloadUploadedFile)
 	r.fiberApp.Add([]string{"GET", "HEAD"}, "/download/recording/:token", r.ctrl.RecordingController.HandleDownloadRecording)

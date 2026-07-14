@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/mynaparrot/plugnmeet-protocol/plugnmeet"
+	natsservice "github.com/mynaparrot/plugnmeet-server/pkg/services/nats"
 	"github.com/mynaparrot/plugnmeet-server/pkg/dbmodels"
 	"github.com/sirupsen/logrus"
 )
@@ -68,24 +69,50 @@ func (m *JanitorModel) activeRoomChecker() {
 			continue
 		}
 
-		if userIds == nil || len(userIds) == 0 {
-			// no user online
-			valid := rInfo.CreatedAt + rInfo.EmptyTimeout
-			if uint64(time.Now().UTC().Unix()) > valid {
-				log.WithFields(logrus.Fields{
-					"emptyTimeout": rInfo.EmptyTimeout,
-					"createdAt":    rInfo.CreatedAt,
-					"validUntil":   valid,
-					"secondsOver":  uint64(time.Now().UTC().Unix()) - valid,
-				}).Info("closing empty room as it reached empty timeout")
+		onlineCount := 0
+		if userIds != nil {
+			onlineCount = len(userIds)
+		}
 
-				// end room by proper channel
+		if onlineCount > 0 {
+			// Room is occupied — refresh last-occupied watermark.
+			m.natsService.TouchRoomLastOccupiedAt(room.RoomId)
+		} else {
+			// Also treat "disconnected" (reconnect grace) as still occupied so a flaky
+			// host/network blip does not start the empty timer prematurely.
+			reconnectCount, err := m.natsService.CountUsersWithStatus(
+				room.RoomId,
+				natsservice.UserStatusDisconnected,
+			)
+			if err != nil {
+				log.WithError(err).Warnln("error counting disconnected users")
+			}
+			if reconnectCount > 0 {
+				m.natsService.TouchRoomLastOccupiedAt(room.RoomId)
+				continue
+			}
+
+			lastOccupied := m.natsService.GetRoomLastOccupiedAt(room.RoomId)
+			if lastOccupied == 0 {
+				lastOccupied = rInfo.CreatedAt
+			}
+			valid := lastOccupied + rInfo.EmptyTimeout
+			now := uint64(time.Now().UTC().Unix())
+			if now > valid {
+				log.WithFields(logrus.Fields{
+					"emptyTimeout":  rInfo.EmptyTimeout,
+					"createdAt":     rInfo.CreatedAt,
+					"lastOccupied":  lastOccupied,
+					"validUntil":    valid,
+					"secondsOver":   now - valid,
+				}).Info("closing empty room as it reached empty timeout since last occupancy")
+
 				m.rm.EndRoom(context.Background(), &plugnmeet.RoomEndReq{RoomId: room.RoomId})
 				continue
 			}
 		}
 
-		var count = int64(len(userIds))
+		var count = int64(onlineCount)
 		if room.JoinedParticipants != count {
 			_, _ = m.ds.UpdateNumParticipants(room.Sid, count)
 		}

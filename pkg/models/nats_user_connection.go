@@ -66,6 +66,8 @@ func (m *NatsModel) OnAfterUserJoined(roomId, userId, calledFrom string) {
 					log.WithError(err).Error("Failed to increment num participants")
 				}
 			}
+			// Mark room occupied so emptyTimeout is based on last activity, not CreatedAt.
+			m.natsService.TouchRoomLastOccupiedAt(roomId)
 		} else if err != nil {
 			log.WithError(err).Warn("Could not get user info after join")
 		}

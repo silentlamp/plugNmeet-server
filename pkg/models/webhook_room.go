@@ -29,12 +29,11 @@ func (m *WebhookModel) roomStarted(event *livekit.WebhookEvent) {
 	}
 
 	if rInfo == nil || meta == nil {
-		// This can happen if a room is created directly in LiveKit without going through plugNmeet's API.
-		// We'll forcefully end it to maintain consistency.
-		log.Warnln("room not found in plugNmeet's NATS store, forcing room termination")
-		if _, err := m.lk.EndRoom(event.Room.Name); err != nil {
-			log.WithError(err).Errorln("failed to forcefully end room in livekit")
-		}
+		// Room was created directly in LiveKit (connection tester, ops probe, etc.)
+		// without going through plugNmeet's API. Do NOT force-terminate — that
+		// breaks LiveKit connection tests and any legitimate direct LiveKit use.
+		// Orphan rooms still expire via LiveKit empty_timeout / room cleanup.
+		log.Warnln("room not found in plugNmeet's NATS store, ignoring room_started webhook")
 		return
 	}
 
@@ -106,6 +105,24 @@ func (m *WebhookModel) roomFinished(event *livekit.WebhookEvent) {
 	event.Room.EmptyTimeout = uint32(rInfo.EmptyTimeout)
 
 	if rInfo.Status != natsservice.RoomStatusEnded {
+		// LiveKit may emit room_finished when the media room briefly empties (host
+		// reconnect, network blip). Do NOT end the PlugNMeet session if NATS still
+		// has online or reconnecting users — otherwise everyone gets SESSION_ENDED.
+		onlineIds, onlineErr := m.natsService.GetOnlineUsersId(rInfo.RoomId)
+		reconnectCount, reconnectErr := m.natsService.CountUsersWithStatus(
+			rInfo.RoomId,
+			natsservice.UserStatusDisconnected,
+		)
+		stillOccupied := (onlineErr == nil && len(onlineIds) > 0) ||
+			(reconnectErr == nil && reconnectCount > 0)
+		if stillOccupied {
+			log.WithFields(logrus.Fields{
+				"online":       len(onlineIds),
+				"disconnected": reconnectCount,
+			}).Warnln("ignoring LiveKit room_finished; NATS still has occupants/reconnecters")
+			return
+		}
+
 		// This means the room was ended directly by LiveKit (e.g., empty timeout),
 		// not through the plugNmeet API. We need to trigger our cleanup flow.
 		log.Warnln("room was not ended via API, triggering plugNmeet EndRoom flow")
