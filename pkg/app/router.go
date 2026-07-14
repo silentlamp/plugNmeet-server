@@ -22,8 +22,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// zenLeaderRoomCodeRE matches share-link paths like /abc-defg-hijk (Java MeetRoomCodes).
-var zenLeaderRoomCodeRE = regexp.MustCompile(`^[a-z]{3}-[a-z]{4}-[a-z]{4}$`)
+// zenLeaderRoomCodeRE matches Java MeetRoomCodes.generate(): xxx-xxxx-xxx (10 letters + 2 hyphens).
+// Also accepts legacy xxx-xxxx-xxxx in case any older links used a 4-char suffix.
+var zenLeaderRoomCodeRE = regexp.MustCompile(`^[a-z]{3}-[a-z]{4}-[a-z]{3,4}$`)
 
 // Router is a struct to hold the dependencies for setting up routes
 type Router struct {
