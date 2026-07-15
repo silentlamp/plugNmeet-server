@@ -14,6 +14,7 @@ import (
 	natsservice "github.com/mynaparrot/plugnmeet-server/pkg/services/nats"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
+	"google.golang.org/protobuf/proto"
 )
 
 func (m *RoomModel) CreateRoom(userCtx context.Context, r *plugnmeet.CreateRoomReq) (*plugnmeet.ActiveRoomInfo, error) {
@@ -196,8 +197,17 @@ func (m *RoomModel) handleExistingRoom(r *plugnmeet.CreateRoomReq, roomDbInfo *d
 
 // setRoomDefaults to Sets default values and metadata
 func (m *RoomModel) setRoomDefaults(r *plugnmeet.CreateRoomReq) {
+	// Capture requested features before PrepareDefaultRoomFeatures. proto.Merge
+	// cannot apply proto3 false over default true for nested bools, so ZenLeader
+	// re-applies explicit create-time disables afterward.
+	var requestedFeatures *plugnmeet.RoomCreateFeatures
+	if r.Metadata != nil && r.Metadata.RoomFeatures != nil {
+		requestedFeatures = proto.Clone(r.Metadata.RoomFeatures).(*plugnmeet.RoomCreateFeatures)
+	}
+
 	// assign all the default features
 	utils.PrepareDefaultRoomFeatures(r)
+	applyRequestedFalseOverrides(r.Metadata.RoomFeatures, requestedFeatures)
 
 	// set default values
 	utils.SetCreateRoomDefaultValues(r, m.app.UploadFileSettings.MaxSize, m.app.UploadFileSettings.MaxSizeWhiteboardFile, m.app.UploadFileSettings.AllowedTypes, m.app.SharedNotePad.Enabled)
