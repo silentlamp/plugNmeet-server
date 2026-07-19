@@ -1,7 +1,8 @@
-name: Deploy ZenLeader PlugNMeet Fork
+name: Deploy ZenLeader Meet Server
 
-# Build silentlamp/zenleader fork server image and roll it out on the VPS.
+# Build silentlamp/zenleader-meet-server image and roll it out on the VPS.
 # Trigger: push to zenleader/dev or manual dispatch.
+# Docker Hub image remains: */plugnmeet-server:zenleader (stack path /opt/plugNmeet).
 
 on:
   push:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-plugnmeet-zenleader
+  group: deploy-zenleader-meet-server
   cancel-in-progress: false
 
 env:

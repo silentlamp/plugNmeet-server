@@ -1,16 +1,17 @@
-# ZenLeader fork notes (plugNmeet-server)
+# ZenLeader fork notes (zenleader-meet-server)
 
-This repository is the **silentlamp** fork of upstream Plug-N-Meet server, customized for ZenLeader.
+This repository is the **silentlamp** ZenLeader Meet server fork (upstream Plug-N-Meet).  
+Former name: `silentlamp/plugNmeet-server` (GitHub redirects).
 
 ## Branch & CI/CD
 
 | Item | Value |
 |------|--------|
 | Working / deploy branch | **`zenleader/dev`** |
-| Remote | `origin` → `https://github.com/silentlamp/plugNmeet-server.git` |
+| Remote | `origin` → `https://github.com/silentlamp/zenleader-meet-server.git` |
 | CI workflow | `.github/workflows/deploy-zenleader.yml` |
 | Trigger | `push` to **`zenleader/dev`** (or `workflow_dispatch`) |
-| Image tag | `:zenleader` → VPS `/opt/plugNmeet` |
+| Image tag | `plugnmeet-server:zenleader` → VPS `/opt/plugNmeet` (Docker image name unchanged) |
 
 Do **not** merge ZenLeader production work only to `main` — that branch does not run the ZenLeader deploy workflow.
 
